@@ -1,0 +1,54 @@
+# A two-epoch fine-tune on an 8-GPU server, with the checkpoints brought home as they appear.
+# Try it without touching anything:  ./train-relay run examples/finetune.toml --dry-run
+name = "finetune_v2"
+host = "gpu-server"                 # an alias from ~/.ssh/config; "local" runs on this machine
+workdir = "/data/myproject"         # absolute path on the remote; the command runs here
+
+[preflight]
+exists = [
+    "/data/datasets/my_dataset/meta/info.json",
+    "/data/myproject/train.py",
+]
+absent = ["/data/runs/finetune_v2"]              # never train over an existing run
+[preflight.sha256]                               # the parent weights must be exactly this file
+"/data/weights/base.pt" = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[gpus]
+count = 8            # all eight must be idle, looked at twice 20 s apart; 0 = no check
+idle_mib = 2000      # a card using less memory than this counts as idle
+wait = false         # true: wait for them instead of failing
+
+[launch]
+command = """
+torchrun --nproc_per_node 8 train.py \
+    --data /data/datasets/my_dataset --init /data/weights/base.pt \
+    --out /data/runs/finetune_v2 --epochs 2
+"""
+[launch.env]
+MASTER_PORT = "24561"
+WANDB_MODE = "offline"
+
+[watch]
+poll_s = 300
+done = 'training finished'                       # a line the command prints at the very end
+error = 'Traceback|OutOfMemoryError|ChildFailedError'
+progress = 'step=[0-9]+/[0-9]+'                  # the last match is printed at every poll
+
+[transfer]
+parallel = 8         # byte ranges per file, each on its own ssh connection
+min_free_gb = 40     # do not pull when the local disk would drop below this
+
+[[pull]]
+glob = "/data/runs/finetune_v2/checkpoints/epoch_*.pt"
+to = "~/models/finetune_v2/checkpoints"
+newest = 2           # large files over a metered line: only the newest two
+while_running = true # the first epoch's weights come home while the second trains
+
+[[sync]]             # small files and directories, by rsync
+from = ["/data/runs/finetune_v2/config.yaml", "/data/runs/finetune_v2/logs"]
+to = "~/models/finetune_v2"
+
+[hooks]              # local commands; RELAY_NAME and RELAY_HOST are always set
+after_pull = 'echo "pulled $RELAY_FILE"'                    # + RELAY_FILE, RELAY_REMOTE
+on_done = 'notify-send "train-relay" "$RELAY_TEXT"'         # + RELAY_STATE, RELAY_TEXT
+on_fail = 'notify-send -u critical "train-relay" "$RELAY_TEXT"'

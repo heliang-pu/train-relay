@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "train-relay"
+version = "0.1.0"
+description = "Start a long job on another machine over ssh, watch it, and bring its results home."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+train-relay = "train_relay.relay:main"
+
+[tool.setuptools]
+packages = ["train_relay"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint.isort]
+force-single-line = true
+force-sort-within-sections = true

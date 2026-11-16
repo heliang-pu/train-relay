@@ -1,0 +1,4 @@
+#!/bin/bash
+# train-relay without installing it (standard library only, python 3.11+).
+D=$(dirname "$(readlink -f "$0")")
+PYTHONPATH="$D${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m train_relay "$@"
